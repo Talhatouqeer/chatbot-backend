@@ -77,23 +77,19 @@ async def forgot_password(
     """
     Request password reset email
     
+    Returns 404 if email not found in database
     Sends an email with a reset token that expires in 1 hour
     (Token is also printed in console for local testing)
     """
-    try:
-        user, token = AuthService.create_password_reset_token(db, request.email)
-        
-        # Send reset email (will print token in console if email fails)
-        EmailService.send_password_reset_email(user.email, user.username, token)
-        
-        return {
-            "message": "Password reset email sent successfully. Check your inbox (or console for testing)."
-        }
-    except HTTPException:
-        # Return success message even if user not found (security best practice)
-        return {
-            "message": "If an account with that email exists, a password reset link has been sent."
-        }
+    # This will raise 404 HTTPException if user not found
+    user, token = AuthService.create_password_reset_token(db, request.email)
+    
+    # Send reset email (will print token in console if email fails)
+    EmailService.send_password_reset_email(user.email, user.username, token)
+    
+    return {
+        "message": "Password reset email sent successfully. Check your inbox."
+    }
 
 
 @router.post("/reset-password", response_model=MessageResponse)
