@@ -1,9 +1,17 @@
-from pydantic import BaseModel, EmailStr, Field # type: ignore
+from pydantic import BaseModel, EmailStr, Field, field_validator # type: ignore
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    
+    @field_validator('email', mode='before')
+    @classmethod
+    def normalize_email(cls, v):
+        """Convert email to lowercase for consistent login"""
+        if isinstance(v, str):
+            return v.lower().strip()
+        return v
 
 
 class TokenResponse(BaseModel):
@@ -19,6 +27,14 @@ class LoginResponse(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+    
+    @field_validator('email', mode='before')
+    @classmethod
+    def normalize_email(cls, v):
+        """Convert email to lowercase"""
+        if isinstance(v, str):
+            return v.lower().strip()
+        return v
 
 
 class ResetPasswordRequest(BaseModel):
