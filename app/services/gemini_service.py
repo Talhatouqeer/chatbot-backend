@@ -56,6 +56,7 @@ class GeminiService:
         """
         Generate response for image with text prompt - Optimized
         """
+        image = None  # Initialize to None
         try:
             # Open and validate image
             if not os.path.exists(image_path):
@@ -64,6 +65,7 @@ class GeminiService:
                     detail="Image file not found"
                 )
             
+            # Open image
             image = Image.open(image_path)
             
             # Short prompt for faster response
@@ -83,6 +85,10 @@ class GeminiService:
                 generation_config=generation_config
             )
             
+            # IMPORTANT: Close image file immediately after use
+            if image:
+                image.close()
+            
             if not response or not response.text:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -92,6 +98,13 @@ class GeminiService:
             return response.text
         
         except Exception as e:
+            # Make sure to close image on error too
+            if image:
+                try:
+                    image.close()
+                except:
+                    pass  # Ignore close errors
+            
             print(f"Error generating image response: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

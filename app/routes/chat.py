@@ -149,7 +149,17 @@ async def upload_image(
     except Exception as e:
         # Clean up file if processing fails
         if os.path.exists(file_path):
-            os.remove(file_path)
+            try:
+                # Try to remove file, but don't fail if it's locked
+                os.remove(file_path)
+            except PermissionError:
+                # File is locked by another process (Pillow), skip deletion
+                # File will be cleaned up later or on server restart
+                print(f"⚠️ Could not delete file {file_path} - file in use")
+                pass
+            except Exception as del_error:
+                print(f"⚠️ Error deleting file: {str(del_error)}")
+                pass
         raise e
 
 
