@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form # type: ignore
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request # type: ignore
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
@@ -69,6 +69,7 @@ async def send_message(
 
 @router.post("/upload-image", response_model=ChatMessageWithHistoryResponse)
 async def upload_image(
+    request: Request,
     message: str = Form(...),
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -111,13 +112,17 @@ async def upload_image(
         # Generate AI response with image
         ai_response = await gemini_service.generate_image_response(message, file_path)
         
-        # Save to database
+        # Generate full URL for image (works for local and production)
+        base_url = str(request.base_url).rstrip('/')
+        full_image_url = f"{base_url}/uploads/{unique_filename}"
+        
+        # Save to database with full URL
         chat_entry = ChatHistory(
             user_id=current_user.id,
             message=message,
             response=ai_response,
             message_type=MessageType.IMAGE,
-            image_url=f"/uploads/{unique_filename}"
+            image_url=full_image_url
         )
         
         db.add(chat_entry)
