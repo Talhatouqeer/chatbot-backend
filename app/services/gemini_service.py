@@ -10,10 +10,11 @@ genai.configure(api_key=settings.GEMINI_API_KEY)
 
 class GeminiService:
     def __init__(self):
-        # Use Gemini 2.0 Flash - Fastest model available
-        # Supports both text and vision, optimized for speed
-        self.text_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        self.vision_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # Use Gemini 1.5 Pro - Most compatible with current SDK
+        # Works with free tier and supports both text and images
+        model_name = 'gemini-2.0-flash'
+        self.text_model = genai.GenerativeModel(model_name)
+        self.vision_model = genai.GenerativeModel(model_name)
     
     async def generate_text_response(self, message: str) -> str:
         """
