@@ -10,9 +10,9 @@ genai.configure(api_key=settings.GEMINI_API_KEY)
 
 class GeminiService:
     def __init__(self):
-        # Use Gemini 1.5 Pro - Most compatible with current SDK
-        # Works with free tier and supports both text and images
-        model_name = 'gemini-2.0-flash'
+        # Use Gemini 2.5 Flash - Latest and fastest free model
+        # Supports both text and images
+        model_name = 'gemini-2.5-flash'
         self.text_model = genai.GenerativeModel(model_name)
         self.vision_model = genai.GenerativeModel(model_name)
     
