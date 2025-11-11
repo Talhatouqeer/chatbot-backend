@@ -10,11 +10,10 @@ genai.configure(api_key=settings.GEMINI_API_KEY)
 
 class GeminiService:
     def __init__(self):
-        # Use Gemini 2.5 Flash - Latest and fastest free model
-        # Supports both text and images
-        model_name = 'gemini-2.5-flash'
-        self.text_model = genai.GenerativeModel(model_name)
-        self.vision_model = genai.GenerativeModel(model_name)
+        # Use most stable working models for free tier
+        # gemini-1.5-flash-latest is the current working free model
+        self.text_model = genai.GenerativeModel('gemini-2.5-flash')
+        self.vision_model = genai.GenerativeModel('gemini-2.5-flash')
     
     async def generate_text_response(self, message: str) -> str:
         """
@@ -22,39 +21,38 @@ class GeminiService:
         Supports English and Roman Urdu
         """
         try:
-            # Short, efficient prompt for faster response
-            prompt = f"Reply helpfully: {message}"
+            # Simple direct prompt
+            prompt = message
             
-            # Speed optimization config
+            # Optimized config with higher token limit
             generation_config = {
-                "temperature": 0.9,
-                "max_output_tokens": 512,  # Limit for faster responses
+                "temperature": 1.0,
+                "max_output_tokens": 2048,  # Higher limit for complete responses
                 "top_p": 0.95,
-                "top_k": 40
+                "top_k": 64
             }
+            
+            # Safety settings - Allow most content
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
             
             response = self.text_model.generate_content(
                 prompt,
-                generation_config=generation_config
+                generation_config=generation_config,
+                safety_settings=safety_settings
             )
             
-            # Safety check for valid response
-            if not response:
+            if not response or not response.text:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to generate response from AI"
                 )
             
-            # Safely get response text (handles finish_reason=2 and other issues)
-            try:
-                if response.text:
-                    return response.text
-            except:
-                # Response generated but no valid text (safety filter, max tokens, etc.)
-                pass
-            
-            # Return friendly fallback message
-            return "I apologize, but I couldn't generate a proper response. Please try again with a different question."
+            return response.text
         
         except Exception as e:
             print(f"Error generating text response: {str(e)}")
@@ -79,44 +77,43 @@ class GeminiService:
             # Open image
             image = Image.open(image_path)
             
-            # Short prompt for faster response
-            prompt = f"Describe image and answer: {message}"
+            # Simple direct prompt
+            prompt = message
             
-            # Speed optimization config
+            # Optimized config with higher token limit
             generation_config = {
-                "temperature": 0.9,
-                "max_output_tokens": 512,
+                "temperature": 1.0,
+                "max_output_tokens": 2048,
                 "top_p": 0.95,
-                "top_k": 40
+                "top_k": 64
             }
+            
+            # Safety settings - Allow most content
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
             
             # Generate response with image
             response = self.vision_model.generate_content(
                 [prompt, image],
-                generation_config=generation_config
+                generation_config=generation_config,
+                safety_settings=safety_settings
             )
             
             # IMPORTANT: Close image file immediately after use
             if image:
                 image.close()
             
-            # Safety check for valid response
-            if not response:
+            if not response or not response.text:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to generate response from AI"
                 )
             
-            # Safely get response text (handles finish_reason=2 and other issues)
-            try:
-                if response.text:
-                    return response.text
-            except:
-                # Response generated but no valid text (safety filter, etc.)
-                pass
-            
-            # Return friendly fallback message
-            return "I apologize, but I couldn't analyze this image properly. Please try a different image or question."
+            return response.text
         
         except Exception as e:
             # Make sure to close image on error too
