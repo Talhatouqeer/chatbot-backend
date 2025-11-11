@@ -38,13 +38,23 @@ class GeminiService:
                 generation_config=generation_config
             )
             
-            if not response or not response.text:
+            # Safety check for valid response
+            if not response:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to generate response from AI"
                 )
             
-            return response.text
+            # Safely get response text (handles finish_reason=2 and other issues)
+            try:
+                if response.text:
+                    return response.text
+            except:
+                # Response generated but no valid text (safety filter, max tokens, etc.)
+                pass
+            
+            # Return friendly fallback message
+            return "I apologize, but I couldn't generate a proper response. Please try again with a different question."
         
         except Exception as e:
             print(f"Error generating text response: {str(e)}")
@@ -90,13 +100,23 @@ class GeminiService:
             if image:
                 image.close()
             
-            if not response or not response.text:
+            # Safety check for valid response
+            if not response:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to generate response from AI"
                 )
             
-            return response.text
+            # Safely get response text (handles finish_reason=2 and other issues)
+            try:
+                if response.text:
+                    return response.text
+            except:
+                # Response generated but no valid text (safety filter, etc.)
+                pass
+            
+            # Return friendly fallback message
+            return "I apologize, but I couldn't analyze this image properly. Please try a different image or question."
         
         except Exception as e:
             # Make sure to close image on error too
