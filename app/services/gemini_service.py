@@ -22,7 +22,9 @@ class GeminiService:
         """
         try:
             # Simple direct prompt
-            prompt = message
+            prompt = f"""You must reply in the SAME language/script the user uses. If user writes in Roman Urdu (Urdu words in English letters like 'kasay ho'), reply ONLY in Roman Urdu. If English, reply in English."""
+            prompt += f"\nUser: {message}"
+            
             
             # Optimized config with higher token limit
             generation_config = {
