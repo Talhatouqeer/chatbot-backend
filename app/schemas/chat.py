@@ -14,6 +14,8 @@ class ChatMessageResponse(BaseModel):
     response: str
     message_type: str
     image_url: Optional[str] = None
+    voice_url: Optional[str] = None  # For voice input file
+    response_audio_url: Optional[str] = None  # For TTS audio response
     created_at: datetime
     
     model_config = ConfigDict(
@@ -29,6 +31,8 @@ class ChatHistoryResponse(BaseModel):
     response: str
     message_type: str
     image_url: Optional[str] = None
+    voice_url: Optional[str] = None  # For voice input file
+    response_audio_url: Optional[str] = None  # For TTS audio response
     created_at: datetime
     
     model_config = ConfigDict(

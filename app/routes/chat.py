@@ -18,48 +18,125 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-
 @router.post("/message", response_model=ChatMessageWithHistoryResponse)
 async def send_message(
-    request: ChatMessageRequest,
+    request: Request,
+    message: Optional[str] = Form(None),  # Optional text message
+    voice: Optional[UploadFile] = File(None),  # Optional voice file
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Send a text message to the chatbot
+    Send a text message OR voice note to the chatbot
+    
+    - If voice file provided: STT (voice → text) → Agent response → TTS (text → audio)
+    - If text provided: Direct agent response → TTS skipped for faster response
     
     Returns current chat + previous chat history
-    Supports English and Roman Urdu text
     """
+    from app.services.speech_service import speech_service
+
+    voice_file_path = None
+    voice_url = None
+    message_text = None
+
+    # Handle voice file (STT)
+    if voice:
+        # Validate file type
+        if voice.content_type not in settings.ALLOWED_AUDIO_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid file type. Allowed types: {', '.join(settings.ALLOWED_AUDIO_TYPES)}"
+            )
+
+        # Read and save voice file
+        contents = await voice.read()
+        if len(contents) > settings.MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File too large. Maximum size: {settings.MAX_UPLOAD_SIZE / (1024*1024)}MB"
+            )
+
+        file_extension = voice.filename.split(".")[-1] if "." in voice.filename else "mp3"
+        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        voice_file_path = os.path.join(UPLOAD_DIR, unique_filename)
+
+        async with aiofiles.open(voice_file_path, "wb") as f:
+            await f.write(contents)
+
+        try:
+            # STT: Convert voice to text
+            message_text = await speech_service.convert_voice_to_text(voice_file_path)
+
+            # Generate voice URL
+            base_url = str(request.base_url).rstrip('/')
+            voice_url = f"{base_url}/uploads/{unique_filename}"
+        except Exception as e:
+            # Clean up file if processing fails
+            if voice_file_path and os.path.exists(voice_file_path):
+                try:
+                    os.remove(voice_file_path)
+                except:
+                    pass
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error processing voice note: {str(e)}"
+            )
+
+    # Handle text message (if no voice file)
+    elif message:
+        message_text = message
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either 'message' (text) or 'voice' (file) must be provided"
+        )
+
     # Validate and process message
-    message = gemini_service.validate_and_process_message(request.message)
-    
-    # Generate AI response
-    ai_response = await gemini_service.generate_text_response(message)
-    
+    message_text = gemini_service.validate_and_process_message(message_text)
+
+    # Generate AI response (as usual)
+    ai_response = await gemini_service.generate_text_response(message_text)
+
+    # TTS: Only run for voice messages
+    response_audio_url = None
+    if voice:  # Only convert to audio if user sent a voice note
+        try:
+            response_audio_filename = f"{uuid.uuid4()}.mp3"
+            response_audio_path = os.path.join(UPLOAD_DIR, response_audio_filename)
+            await speech_service.convert_text_to_speech(ai_response, response_audio_path)
+
+            base_url = str(request.base_url).rstrip('/')
+            response_audio_url = f"{base_url}/uploads/{response_audio_filename}"
+        except Exception as e:
+            print(f"[WARNING] TTS failed: {str(e)}. Continuing without audio.")
+            response_audio_url = None  # Keep None if TTS fails
+
     # Save to database
     chat_entry = ChatHistory(
         user_id=current_user.id,
-        message=message,
+        message=message_text,
         response=ai_response,
-        message_type=MessageType.TEXT
+        message_type=MessageType.VOICE if voice else MessageType.TEXT,
+        voice_url=voice_url,
+        response_audio_url=response_audio_url
     )
-    
+
     db.add(chat_entry)
     db.commit()
     db.refresh(chat_entry)
-    
+
     # Get previous chat history (excluding current one, last 20 chats)
     previous_chats = db.query(ChatHistory).filter(
         ChatHistory.user_id == current_user.id,
         ChatHistory.id != chat_entry.id
     ).order_by(ChatHistory.created_at.desc()).limit(20).all()
-    
+
     # Get total chat count
     total_chats = db.query(ChatHistory).filter(
         ChatHistory.user_id == current_user.id
     ).count()
-    
+
     return {
         "current_chat": chat_entry,
         "chat_history": previous_chats,

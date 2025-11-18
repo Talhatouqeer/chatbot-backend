@@ -10,6 +10,7 @@ from app.database import Base
 class MessageType(str, enum.Enum):
     TEXT = "text"
     IMAGE = "image"
+    VOICE = "voice"
 
 
 class ChatHistory(Base):
@@ -21,6 +22,8 @@ class ChatHistory(Base):
     response = Column(Text, nullable=False)
     message_type = Column(Enum(MessageType), default=MessageType.TEXT)
     image_url = Column(String, nullable=True)
+    voice_url = Column(String, nullable=True)  # For voice input file
+    response_audio_url = Column(String, nullable=True)  # For TTS audio response
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationship

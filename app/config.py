@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_IMAGE_TYPES: list = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+    ALLOWED_AUDIO_TYPES: list = ["audio/mpeg", "audio/mp3"]  # For voice notes
+    
+    # AssemblyAI (for voice transcription)
+    ASSEMBLYAI_API_KEY: str = ""  # Get free from https://www.assemblyai.com/
     
     class Config:
         env_file = ".env"

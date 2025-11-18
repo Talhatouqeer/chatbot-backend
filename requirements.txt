@@ -23,3 +23,5 @@ authlib
 sendgrid
 Pillow
 aiofiles
+assemblyai
+gtts
