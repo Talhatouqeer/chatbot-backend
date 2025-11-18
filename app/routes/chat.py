@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@router.post("/message", response_model=ChatMessageWithHistoryResponse, summary="Send Text Message", description="Send a text message to the chatbot. Returns AI text response with chat history.")
+@router.post("/message", response_model=ChatMessageWithHistoryResponse, summary="Send Text Message", description="Send a text message to the chatbot. Returns AI text response + audio response URL with chat history.")
 async def send_message(
     request: Request,
     message: str = Form(..., description="Text message to send to the chatbot"),  # Required text message
@@ -30,30 +30,57 @@ async def send_message(
     
     - Accepts text message only
     - Direct AI agent response (text format)
-    - Fast response without audio processing
-    - No TTS conversion
+    - TTS: Converts response to audio
+    - Returns text response + audio URL
     
-    **Returns:** Current chat + previous chat history (last 20 chats)
+    **Returns:** Current chat + previous chat history (last 20 chats) + audio response URL
     """
+    from app.services.speech_service import speech_service
+    
     # Validate and process message
     message_text = gemini_service.validate_and_process_message(message.strip())
 
     # Generate AI response
     ai_response = await gemini_service.generate_text_response(message_text)
 
-    # Save to database (text message, no audio)
+    # TTS: Convert response to audio
+    response_audio_url = None
+    try:
+        response_audio_filename = f"{uuid.uuid4()}.mp3"
+        response_audio_path = os.path.join(UPLOAD_DIR, response_audio_filename)
+        
+        # Convert text to speech
+        await speech_service.convert_text_to_speech(ai_response, response_audio_path)
+        
+        # Generate full URL for the audio file
+        base_url = str(request.base_url).rstrip('/')
+        response_audio_url = f"{base_url}/uploads/{response_audio_filename}"
+        print(f"[DEBUG] TTS successful for text message. response_audio_url: {response_audio_url}")
+    except HTTPException as e:
+        # Re-raise HTTP exceptions (like service not available)
+        print(f"[ERROR] TTS HTTPException: {str(e)}")
+        raise
+    except Exception as e:
+        # For other exceptions, continue without audio but log the error
+        print(f"[WARNING] TTS failed for text message: {str(e)}. Continuing without audio.")
+        response_audio_url = None
+
+    # Save to database (text message with audio response)
     chat_entry = ChatHistory(
         user_id=current_user.id,
         message=message_text,
         response=ai_response,
         message_type=MessageType.TEXT,
         voice_url=None,
-        response_audio_url=None
+        response_audio_url=response_audio_url
     )
 
     db.add(chat_entry)
     db.commit()
     db.refresh(chat_entry)
+    
+    # Debug: Verify response_audio_url is set
+    print(f"[DEBUG] Text message saved - response_audio_url: {chat_entry.response_audio_url}")
 
     # Get previous chat history (excluding current one, last 20 chats)
     previous_chats = db.query(ChatHistory).filter(
@@ -66,11 +93,17 @@ async def send_message(
         ChatHistory.user_id == current_user.id
     ).count()
 
-    return {
+    # Ensure response_audio_url is included in response
+    response_data = {
         "current_chat": chat_entry,
         "chat_history": previous_chats,
         "total_chats": total_chats
     }
+    
+    # Debug: Verify text message response
+    print(f"[DEBUG] Text message response - response_audio_url: {chat_entry.response_audio_url}")
+    
+    return response_data
 
 
 @router.post("/voice", response_model=ChatMessageWithHistoryResponse, summary="Send Voice Message", description="Send a voice/audio message to the chatbot. Returns AI text response + audio response URL with chat history.")
@@ -144,11 +177,20 @@ async def send_voice_message(
         try:
             response_audio_filename = f"{uuid.uuid4()}.mp3"
             response_audio_path = os.path.join(UPLOAD_DIR, response_audio_filename)
+            
+            # Convert text to speech
             await speech_service.convert_text_to_speech(ai_response, response_audio_path)
-
+            
+            # Generate full URL for the audio file
             base_url = str(request.base_url).rstrip('/')
             response_audio_url = f"{base_url}/uploads/{response_audio_filename}"
+            print(f"[DEBUG] TTS successful. response_audio_url: {response_audio_url}")
+        except HTTPException as e:
+            # Re-raise HTTP exceptions (like service not available)
+            print(f"[ERROR] TTS HTTPException: {str(e)}")
+            raise
         except Exception as e:
+            # For other exceptions, continue without audio but log the error
             print(f"[WARNING] TTS failed: {str(e)}. Continuing without audio.")
             response_audio_url = None
 
@@ -165,6 +207,9 @@ async def send_voice_message(
         db.add(chat_entry)
         db.commit()
         db.refresh(chat_entry)
+        
+        # Debug: Verify response_audio_url is set
+        print(f"[DEBUG] Saved to DB - response_audio_url: {chat_entry.response_audio_url}, voice_url: {chat_entry.voice_url}")
 
         # Get previous chat history (excluding current one, last 20 chats)
         previous_chats = db.query(ChatHistory).filter(
@@ -177,11 +222,18 @@ async def send_voice_message(
             ChatHistory.user_id == current_user.id
         ).count()
 
-        return {
+        # Ensure response_audio_url is included in response
+        response_data = {
             "current_chat": chat_entry,
             "chat_history": previous_chats,
             "total_chats": total_chats
         }
+        
+        # Debug: Print response data to verify
+        print(f"[DEBUG] Voice response - current_chat.response_audio_url: {chat_entry.response_audio_url}")
+        print(f"[DEBUG] Voice response - current_chat.voice_url: {chat_entry.voice_url}")
+        
+        return response_data
 
     except HTTPException:
         # Re-raise HTTP exceptions
