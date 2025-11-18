@@ -5,7 +5,7 @@ from typing import Optional, List
 
 
 class ChatMessageRequest(BaseModel):
-    message: str = Field(..., min_length=1)
+    message: Optional[str] = Field(None, min_length=0)  # Optional message field
 
 
 class ChatMessageResponse(BaseModel):
