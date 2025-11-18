@@ -35,15 +35,3 @@ def downgrade() -> None:
     # Note: PostgreSQL doesn't support removing enum values directly
     # The 'VOICE' enum value will remain but won't be used
 
-
-    op.add_column('chat_history', sa.Column('response_audio_url', sa.String(), nullable=True))
-
-
-def downgrade() -> None:
-    # Remove columns
-    op.drop_column('chat_history', 'response_audio_url')
-    op.drop_column('chat_history', 'voice_url')
-    
-    # Note: PostgreSQL doesn't support removing enum values directly
-    # The 'VOICE' enum value will remain but won't be used
-
