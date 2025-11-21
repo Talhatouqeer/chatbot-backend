@@ -24,4 +24,5 @@ sendgrid
 Pillow
 aiofiles
 assemblyai
-gtts
+gtts==2.5.4
+pygame==2.6.1
